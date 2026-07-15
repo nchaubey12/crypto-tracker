@@ -1,0 +1,22 @@
+# Copy this file to "terraform.tfvars" (no .example suffix) and fill in
+# your real values. terraform.tfvars is git-ignored so your secrets never
+# get committed.
+#
+#   cp terraform.tfvars.example terraform.tfvars
+
+lab_role_arn = "arn:aws:iam::123456789012:role/LabRole"
+alert_email  = "you@example.com"
+
+# Leave blank to use CoinGecko's free tier with no key
+coingecko_api_key = ""
+
+portfolio_holdings = {
+  bitcoin = {
+    quantity          = 0.05
+    target_weight_pct = 60
+  }
+  ethereum = {
+    quantity          = 1.2
+    target_weight_pct = 40
+  }
+}
