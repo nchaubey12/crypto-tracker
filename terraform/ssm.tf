@@ -17,8 +17,7 @@ resource "aws_ssm_parameter" "swing_alert_threshold_pct" {
   value = tostring(var.swing_alert_threshold_pct)
 }
 
-resource "aws_ssm_parameter" "portfolio_holdings" {
-  name  = "/${var.project_name}/portfolio_holdings"
-  type  = "String"
-  value = jsonencode(var.portfolio_holdings)
-}
+# portfolio_holdings used to live here as a static SSM parameter. It now
+# lives in DynamoDB (see terraform/dynamodb.tf: portfolio_config) so the UI
+# can edit it at runtime via PUT /portfolio - SSM values are Terraform-only,
+# there's no API for a Lambda to safely let end users write to them.

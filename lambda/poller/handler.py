@@ -2,7 +2,8 @@
 Poller Lambda.
 
 Runs on a schedule (see EventBridge in terraform/eventbridge.tf).
-1. Reads config (holdings, threshold, api key) from SSM Parameter Store.
+1. Reads holdings from DynamoDB (portfolio_config table - editable via the
+   UI's PUT /portfolio) and threshold/api key from SSM Parameter Store.
 2. Calls the CoinGecko API for current prices.
 3. Computes: total portfolio value, per-coin profit/loss, allocation drift.
 4. Writes a row to DynamoDB (portfolio_history table).
@@ -25,6 +26,7 @@ sns = boto3.client("sns")
 
 SSM_PREFIX = os.environ["SSM_PREFIX"]
 HISTORY_TABLE = os.environ["HISTORY_TABLE"]
+CONFIG_TABLE = os.environ["CONFIG_TABLE"]
 SNS_TOPIC_ARN = os.environ["SNS_TOPIC_ARN"]
 PORTFOLIO_ID = "default"  # single-portfolio project; extend to multiple later if needed
 
@@ -48,6 +50,19 @@ def to_decimal(obj):
 def get_ssm_param(name, decrypt=False):
     resp = ssm.get_parameter(Name=f"{SSM_PREFIX}/{name}", WithDecryption=decrypt)
     return resp["Parameter"]["Value"]
+
+
+def get_holdings(config_table):
+    """Current holdings from portfolio_config - this is what the UI's
+    PUT /portfolio writes to, so an edit takes effect on the very next poll."""
+    resp = config_table.get_item(Key={"portfolio_id": PORTFOLIO_ID})
+    item = resp.get("Item")
+    if not item:
+        raise RuntimeError(
+            "No portfolio_config item found - Terraform should have seeded one "
+            "on first apply. Check the aws_dynamodb_table_item.portfolio_config_seed resource."
+        )
+    return json.loads(item["holdings"])
 
 
 def fetch_prices(coin_ids, api_key):
@@ -76,7 +91,8 @@ def get_last_snapshot(table):
 
 
 def lambda_handler(event, context):
-    holdings = json.loads(get_ssm_param("portfolio_holdings"))
+    config_table = dynamodb.Table(CONFIG_TABLE)
+    holdings = get_holdings(config_table)
     threshold_pct = float(get_ssm_param("swing_alert_threshold_pct"))
     api_key = get_ssm_param("coingecko_api_key", decrypt=True)
 

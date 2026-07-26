@@ -53,6 +53,29 @@ variable "coingecko_api_key" {
   sensitive   = true
 }
 
+variable "live_version" {
+  description = <<-EOT
+    Published version number of api_handler that the "live" alias treats
+    as 100% baseline ("blue"). On the very first apply this should be "1"
+    (the version publish = true creates). During a rollout, leave this at
+    the old version while canary_weight ramps up, then flip it to the new
+    version and set canary_weight back to 0 to complete the cutover.
+  EOT
+  type        = string
+  default     = "1"
+}
+
+variable "canary_weight" {
+  description = <<-EOT
+    Fraction (0.0-1.0) of traffic sent to the newest published version of
+    api_handler ("green") while it's still being validated. 0 = all
+    traffic on live_version. Step this up gradually (e.g. 0.1 -> 0.5 -> 1.0)
+    while watching CloudWatch alarms, per the rollout runbook.
+  EOT
+  type        = number
+  default     = 0
+}
+
 variable "portfolio_holdings" {
   description = "Your coin holdings: ticker -> {quantity, target_weight_pct}"
   type = map(object({
