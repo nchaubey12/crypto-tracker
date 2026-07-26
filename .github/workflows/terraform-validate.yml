@@ -1,0 +1,44 @@
+name: Terraform validate
+
+# Stage 1 of the pipeline described in the delivery deep-dive deck: catch
+# broken HCL before anyone touches the Lab. Needs no AWS credentials at all.
+#
+# Stage 2 (terraform plan / apply, ramping canary_weight) stays manual on
+# purpose - AWS Academy Learner Lab issues temporary, session-scoped keys
+# instead of a long-lived role GitHub Actions could assume via OIDC.
+# Storing those as a repo secret would mean constantly re-uploading expired
+# credentials, which is worse security hygiene than running apply by hand
+# from a fresh Lab session. See README "Deploy" section.
+
+on:
+  push:
+    paths:
+      - "terraform/**"
+  pull_request:
+    paths:
+      - "terraform/**"
+
+jobs:
+  validate:
+    name: fmt, init, validate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: terraform fmt -check
+        run: terraform fmt -check -recursive
+
+      - name: terraform init (no backend, no credentials)
+        run: terraform init -backend=false
+
+      - name: terraform validate
+        run: terraform validate

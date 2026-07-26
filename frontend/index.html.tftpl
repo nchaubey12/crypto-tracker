@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Crypto Portfolio Tracker</title>
+<style>
+  :root {
+    --navy: #1e2761;
+    --navy-dk: #141a45;
+    --mint: #00c896;
+    --ice: #cadcfc;
+    --ice-tint: #eef3fc;
+    --text: #1b2140;
+    --muted: #6b7395;
+    --red: #c0392b;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #f7f9fc;
+    color: var(--text);
+  }
+  header {
+    background: var(--navy);
+    color: #fff;
+    padding: 1.25rem 1.25rem;
+  }
+  header h1 { margin: 0 0 0.25rem; font-size: 1.4rem; }
+  header p { margin: 0; color: var(--ice); font-size: 0.9rem; }
+
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 1.25rem;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+  @media (min-width: 900px) {
+    main { grid-template-columns: 1.1fr 1fr; align-items: start; }
+    .full-width { grid-column: 1 / -1; }
+  }
+
+  .card {
+    background: #fff;
+    border-radius: var(--radius);
+    padding: 1.1rem;
+    box-shadow: 0 2px 10px rgba(27, 33, 64, 0.08);
+  }
+  .card h2 {
+    margin: 0 0 0.9rem;
+    font-size: 1.05rem;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 0.45rem 0.4rem; border-bottom: 1px solid #eef1f8; }
+  th { color: var(--muted); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; }
+  td input {
+    width: 100%;
+    padding: 0.4rem 0.5rem;
+    border: 1px solid #d7deed;
+    border-radius: 6px;
+    font-size: 0.9rem;
+  }
+  .coin-cell { display: flex; flex-direction: column; }
+  .coin-cell input { text-transform: lowercase; }
+
+  .row-actions { display: flex; gap: 0.5rem; margin-top: 0.9rem; flex-wrap: wrap; }
+  button {
+    font-size: 0.88rem;
+    padding: 0.55rem 0.9rem;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .btn-primary { background: var(--mint); color: #06281f; }
+  .btn-secondary { background: var(--ice-tint); color: var(--navy); }
+  .btn-danger { background: transparent; color: var(--red); padding: 0.3rem 0.5rem; font-weight: 700; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .banner {
+    padding: 0.65rem 0.85rem;
+    border-radius: 8px;
+    font-size: 0.86rem;
+    margin-bottom: 0.9rem;
+    display: none;
+  }
+  .banner.error { background: #fbe4e1; color: var(--red); display: block; }
+  .banner.success { background: #e3f9f1; color: #067a56; display: block; }
+
+  .stat-row { display: flex; justify-content: space-between; padding: 0.35rem 0; font-size: 0.92rem; }
+  .stat-row .label { color: var(--muted); }
+  .drift-pos { color: #067a56; }
+  .drift-neg { color: var(--red); }
+
+  .muted { color: var(--muted); font-size: 0.85rem; }
+  canvas { width: 100%; height: 190px; display: block; }
+  .empty-state { color: var(--muted); font-size: 0.9rem; padding: 0.5rem 0; }
+  .chart-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 0.6rem; flex-wrap: wrap; gap: 0.5rem; }
+  .live-dot {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--mint); margin-right: 0.4rem;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Crypto Portfolio Tracker</h1>
+  <p>Edit your holdings below — the poller picks up changes on its next run.</p>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Your holdings</h2>
+    <div id="editor-banner" class="banner"></div>
+    <table id="holdings-table">
+      <thead>
+        <tr>
+          <th style="width:34%">Coin (CoinGecko id)</th>
+          <th>Quantity</th>
+          <th>Target weight %</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="holdings-body"></tbody>
+    </table>
+    <div class="row-actions">
+      <button type="button" class="btn-secondary" id="add-row-btn">+ Add coin</button>
+      <button type="button" class="btn-primary" id="save-btn">Save portfolio</button>
+    </div>
+    <p class="muted" id="updated-at" style="margin-top:0.75rem;"></p>
+  </section>
+
+  <section class="card">
+    <h2>Current snapshot</h2>
+    <div id="current-content">
+      <p class="empty-state">Loading…</p>
+    </div>
+  </section>
+
+  <section class="card full-width">
+    <h2>Value over time</h2>
+    <canvas id="history-chart" width="1000" height="190"></canvas>
+    <div id="history-empty" class="empty-state" style="display:none;">No history yet — the poller hasn't run since this portfolio was created.</div>
+    <div class="chart-footer">
+      <span class="muted"><span class="live-dot" id="live-dot"></span>Auto-refreshing every <span id="refresh-interval-label">30s</span> · last updated <span id="last-refreshed">—</span></span>
+      <button type="button" class="btn-secondary" id="refresh-btn">Refresh now</button>
+    </div>
+  </section>
+</main>
+
+<script>
+const API_BASE = "${api_base_url}";
+
+function el(tag, attrs = {}, children = []) {
+  const e = document.createElement(tag);
+  Object.entries(attrs).forEach(([k, v]) => {
+    if (k === "class") e.className = v;
+    else if (k === "text") e.textContent = v;
+    else e.setAttribute(k, v);
+  });
+  children.forEach((c) => e.appendChild(c));
+  return e;
+}
+
+function showBanner(id, message, type) {
+  const b = document.getElementById(id);
+  b.textContent = message;
+  b.className = "banner " + type;
+}
+function clearBanner(id) {
+  const b = document.getElementById(id);
+  b.className = "banner";
+  b.textContent = "";
+}
+
+// ---------------- Editor ----------------
+let rowCount = 0;
+
+function addHoldingRow(coinId = "", quantity = "", weight = "") {
+  const tbody = document.getElementById("holdings-body");
+  const rowId = "row-" + (rowCount++);
+  const tr = el("tr", { id: rowId });
+
+  const coinTd = el("td");
+  const coinInput = el("input", { type: "text", placeholder: "bitcoin", value: coinId, "data-field": "coin" });
+  coinTd.appendChild(coinInput);
+
+  const qtyTd = el("td");
+  const qtyInput = el("input", { type: "number", step: "any", min: "0", placeholder: "0.05", value: quantity, "data-field": "quantity" });
+  qtyTd.appendChild(qtyInput);
+
+  const weightTd = el("td");
+  const weightInput = el("input", { type: "number", step: "any", min: "0", max: "100", placeholder: "60", value: weight, "data-field": "weight" });
+  weightTd.appendChild(weightInput);
+
+  const actionTd = el("td");
+  const delBtn = el("button", { type: "button", class: "btn-danger", text: "✕" });
+  delBtn.addEventListener("click", () => tr.remove());
+  actionTd.appendChild(delBtn);
+
+  tr.appendChild(coinTd);
+  tr.appendChild(qtyTd);
+  tr.appendChild(weightTd);
+  tr.appendChild(actionTd);
+  tbody.appendChild(tr);
+}
+
+function collectHoldings() {
+  const rows = document.querySelectorAll("#holdings-body tr");
+  const holdings = {};
+  for (const row of rows) {
+    const coin = row.querySelector('[data-field="coin"]').value.trim().toLowerCase();
+    const quantity = row.querySelector('[data-field="quantity"]').value;
+    const weight = row.querySelector('[data-field="weight"]').value;
+    if (!coin) continue;
+    holdings[coin] = { quantity: parseFloat(quantity), target_weight_pct: parseFloat(weight) };
+  }
+  return holdings;
+}
+
+async function loadPortfolio() {
+  try {
+    const res = await fetch(`$${API_BASE}/portfolio`);
+    if (!res.ok) throw new Error(`Server returned $${res.status}`);
+    const data = await res.json();
+    document.getElementById("holdings-body").innerHTML = "";
+    Object.entries(data.holdings || {}).forEach(([coinId, info]) => {
+      addHoldingRow(coinId, info.quantity, info.target_weight_pct);
+    });
+    if (Object.keys(data.holdings || {}).length === 0) addHoldingRow();
+    const updatedEl = document.getElementById("updated-at");
+    updatedEl.textContent = data.updated_at && data.updated_at !== "seed"
+      ? `Last saved: $${new Date(data.updated_at).toLocaleString()}`
+      : "Showing the default portfolio from initial deploy — edit and save to customize.";
+  } catch (err) {
+    showBanner("editor-banner", `Couldn't load portfolio: $${err.message}`, "error");
+    addHoldingRow();
+  }
+}
+
+async function savePortfolio() {
+  clearBanner("editor-banner");
+  const holdings = collectHoldings();
+  const saveBtn = document.getElementById("save-btn");
+  saveBtn.disabled = true;
+  try {
+    const res = await fetch(`$${API_BASE}/portfolio`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ holdings }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `Server returned $${res.status}`);
+    showBanner("editor-banner", "Saved. The next poller run will use this portfolio.", "success");
+  } catch (err) {
+    showBanner("editor-banner", err.message, "error");
+  } finally {
+    saveBtn.disabled = false;
+  }
+}
+
+// ---------------- Current snapshot ----------------
+async function loadCurrent() {
+  const content = document.getElementById("current-content");
+  try {
+    const res = await fetch(`$${API_BASE}/current`);
+    if (res.status === 404) {
+      content.innerHTML = "";
+      content.appendChild(el("p", { class: "empty-state", text: "No snapshot yet — the poller hasn't run since deploy. It runs on a schedule (see EventBridge)." }));
+      return;
+    }
+    if (!res.ok) throw new Error(`Server returned $${res.status}`);
+    const snap = await res.json();
+    content.innerHTML = "";
+    content.appendChild(el("div", { class: "stat-row" }, [
+      el("span", { class: "label", text: "Total value" }),
+      el("span", { text: `$$${Number(snap.total_value_usd).toLocaleString(undefined, {maximumFractionDigits: 2})}` }),
+    ]));
+    content.appendChild(el("div", { class: "stat-row" }, [
+      el("span", { class: "label", text: "As of" }),
+      el("span", { text: new Date(snap.timestamp).toLocaleString() }),
+    ]));
+    const table = el("table", { style: "margin-top:0.75rem;" });
+    const thead = el("thead", {}, [el("tr", {}, [
+      el("th", { text: "Coin" }), el("th", { text: "Value" }), el("th", { text: "Weight" }), el("th", { text: "Drift" }),
+    ])]);
+    const tbody = el("tbody");
+    Object.entries(snap.breakdown || {}).forEach(([coin, d]) => {
+      const drift = Number(d.allocation_drift_pct);
+      tbody.appendChild(el("tr", {}, [
+        el("td", { text: coin }),
+        el("td", { text: `$$${Number(d.value_usd).toLocaleString()}` }),
+        el("td", { text: `$${d.actual_weight_pct}%` }),
+        el("td", { text: `$${drift > 0 ? "+" : ""}$${drift}%`, class: drift >= 0 ? "drift-pos" : "drift-neg" }),
+      ]));
+    });
+    table.appendChild(thead);
+    table.appendChild(tbody);
+    content.appendChild(table);
+  } catch (err) {
+    content.innerHTML = "";
+    content.appendChild(el("p", { class: "empty-state", text: `Couldn't load snapshot: $${err.message}` }));
+  }
+}
+
+// ---------------- History chart ----------------
+async function loadHistory() {
+  const canvas = document.getElementById("history-chart");
+  const emptyEl = document.getElementById("history-empty");
+  try {
+    const res = await fetch(`$${API_BASE}/history?limit=60`);
+    if (!res.ok) throw new Error(`Server returned $${res.status}`);
+    const data = await res.json();
+    const items = data.items || [];
+    if (items.length < 2) {
+      canvas.style.display = "none";
+      emptyEl.style.display = "block";
+      return;
+    }
+    canvas.style.display = "block";
+    emptyEl.style.display = "none";
+    drawChart(canvas, items.map((i) => ({
+      value: Number(i.total_value_usd),
+      timestamp: i.timestamp,
+    })));
+  } catch (err) {
+    canvas.style.display = "none";
+    emptyEl.style.display = "block";
+    emptyEl.textContent = `Couldn't load history: $${err.message}`;
+  }
+}
+
+function formatAxisTime(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatAxisValue(v) {
+  if (Math.abs(v) >= 1000) return "$" + (v / 1000).toFixed(1) + "k";
+  return "$" + v.toFixed(0);
+}
+
+function drawChart(canvas, points) {
+  const ctx = canvas.getContext("2d");
+  const w = canvas.width, h = canvas.height;
+  const padLeft = 62, padRight = 14, padTop = 16, padBottom = 30;
+  const plotW = w - padLeft - padRight;
+  const plotH = h - padTop - padBottom;
+
+  ctx.clearRect(0, 0, w, h);
+
+  const values = points.map((p) => p.value);
+  const rawMin = Math.min(...values), rawMax = Math.max(...values);
+  const span = rawMax - rawMin || Math.abs(rawMax) * 0.05 || 1;
+  const min = rawMin - span * 0.1;
+  const max = rawMax + span * 0.1;
+  const range = max - min || 1;
+  const stepX = points.length > 1 ? plotW / (points.length - 1) : 0;
+
+  const xForIndex = (i) => padLeft + i * stepX;
+  const yForValue = (v) => padTop + plotH - ((v - min) / range) * plotH;
+
+  // Y axis: gridlines + value labels
+  const yTicks = 4;
+  ctx.font = "11px -apple-system, Roboto, Arial, sans-serif";
+  ctx.fillStyle = "#8991ad";
+  ctx.strokeStyle = "#eef1f8";
+  ctx.lineWidth = 1;
+  for (let t = 0; t <= yTicks; t++) {
+    const value = min + (range * t) / yTicks;
+    const y = yForValue(value);
+    ctx.beginPath();
+    ctx.moveTo(padLeft, y);
+    ctx.lineTo(w - padRight, y);
+    ctx.stroke();
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    ctx.fillText(formatAxisValue(value), padLeft - 8, y);
+  }
+
+  // X axis: a handful of evenly spaced time labels
+  const xTickCount = Math.min(5, points.length);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  for (let t = 0; t < xTickCount; t++) {
+    const idx = xTickCount === 1 ? 0 : Math.round((t * (points.length - 1)) / (xTickCount - 1));
+    const x = xForIndex(idx);
+    ctx.fillText(formatAxisTime(points[idx].timestamp), x, h - padBottom + 8);
+  }
+
+  // Line + fill
+  ctx.strokeStyle = "#00c896";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  points.forEach((p, i) => {
+    const x = xForIndex(i), y = yForValue(p.value);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  ctx.fillStyle = "rgba(0, 200, 150, 0.12)";
+  ctx.lineTo(xForIndex(points.length - 1), padTop + plotH);
+  ctx.lineTo(padLeft, padTop + plotH);
+  ctx.closePath();
+  ctx.fill();
+
+  // Latest point marker
+  const last = points[points.length - 1];
+  ctx.fillStyle = "#00c896";
+  ctx.beginPath();
+  ctx.arc(xForIndex(points.length - 1), yForValue(last.value), 3.5, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// ---------------- Auto-refresh ----------------
+// The poller writes a new snapshot on its own schedule (see EventBridge),
+// so the UI polls the read endpoints periodically instead of requiring a
+// manual page reload to pick up new data.
+const REFRESH_INTERVAL_MS = 30000;
+let refreshTimer = null;
+
+async function refreshLiveData() {
+  await Promise.all([loadCurrent(), loadHistory()]);
+  const label = document.getElementById("last-refreshed");
+  if (label) label.textContent = new Date().toLocaleTimeString();
+}
+
+function startAutoRefresh() {
+  stopAutoRefresh();
+  refreshTimer = setInterval(refreshLiveData, REFRESH_INTERVAL_MS);
+  const dot = document.getElementById("live-dot");
+  if (dot) dot.style.display = "inline-block";
+}
+
+function stopAutoRefresh() {
+  if (refreshTimer) {
+    clearInterval(refreshTimer);
+    refreshTimer = null;
+  }
+  const dot = document.getElementById("live-dot");
+  if (dot) dot.style.display = "none";
+}
+
+// Pause polling when the tab is hidden (saves calls / Lab session time),
+// and immediately catch up on whatever changed as soon as it's visible again.
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    stopAutoRefresh();
+  } else {
+    refreshLiveData();
+    startAutoRefresh();
+  }
+});
+
+// ---------------- Wire up ----------------
+document.getElementById("add-row-btn").addEventListener("click", () => addHoldingRow());
+document.getElementById("save-btn").addEventListener("click", savePortfolio);
+document.getElementById("refresh-btn").addEventListener("click", refreshLiveData);
+document.getElementById("refresh-interval-label").textContent = (REFRESH_INTERVAL_MS / 1000) + "s";
+
+loadPortfolio();
+refreshLiveData();
+if (!document.hidden) startAutoRefresh();
+</script>
+</body>
+</html>
