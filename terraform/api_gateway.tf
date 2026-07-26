@@ -31,8 +31,8 @@ resource "aws_apigatewayv2_api" "portfolio_api" {
 }
 
 resource "aws_apigatewayv2_integration" "api_handler_integration" {
-  api_id                 = aws_apigatewayv2_api.portfolio_api.id
-  integration_type       = "AWS_PROXY"
+  api_id           = aws_apigatewayv2_api.portfolio_api.id
+  integration_type = "AWS_PROXY"
   # Routes through the "live" alias (see lambda.tf) instead of the bare
   # function, so blue/green traffic shifting via the alias's weighted
   # routing_config actually takes effect. Pointing this at
@@ -79,7 +79,7 @@ resource "aws_lambda_permission" "allow_apigw_invoke_handler" {
   # Qualifier scopes this permission to the "live" alias specifically,
   # matching the integration_uri above - API Gateway invokes the alias,
   # not the bare function.
-  qualifier     = aws_lambda_alias.api_handler_live.name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_apigatewayv2_api.portfolio_api.execution_arn}/*/*"
+  qualifier  = aws_lambda_alias.api_handler_live.name
+  principal  = "apigateway.amazonaws.com"
+  source_arn = "${aws_apigatewayv2_api.portfolio_api.execution_arn}/*/*"
 }
