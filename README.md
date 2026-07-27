@@ -175,3 +175,8 @@ terraform destroy
 - Each Lambda's code and its dependencies live in its own folder under
   `lambda/`; Terraform zips them automatically on `apply` — you never
   build the zip yourself.
+
+  ## Authors
+
+- **Om Surase** - https://github.com/OmSurase1411
+- **Nidhi Chaubey** - https://github.com/nchaubey12
